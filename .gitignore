@@ -1,0 +1,15 @@
+dist
+bin
+node_modules
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+.env
+.env.cache*
+/.types
+/private
+.wireit
+.DS_Store
