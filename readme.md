@@ -30,15 +30,15 @@ npx find-jsx-strings .
 Will report:
 
 ```
-C:\Users\ben\projects\find_strings\test\Example.tsx:6
+index.tsx:6
  6 │       <h1>Hello</h1>
    ·           ─────
 
-C:\Users\ben\projects\find_strings\test\Example.tsx:7
+index.tsx:7
  7 │       <p>Start editing</p>
    ·          ─────────────
 
-C:\Users\ben\projects\find_strings\test\Example.tsx:8
+index.tsx:8
  8 │       <img alt="Some alt text" other={true} data-test />
    ·                ───────────────
 ```
