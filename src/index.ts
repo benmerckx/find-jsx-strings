@@ -13,6 +13,7 @@ type Options = {
 }
 
 const version = createRequire(import.meta.url)('../package.json').version
+let found = 0
 
 sade('find_strings <src>', true)
   .version(version)
@@ -63,6 +64,7 @@ class StringVisitor extends Visitor {
         '─'.repeat(messageLength)
     )
     //console.log(' '.repeat(pad + 2) + `╰────`)
+    found++
   }
   visitJSXText(text: JSXText) {
     if (!this.options.skipText) {
@@ -125,11 +127,12 @@ async function readFiles(dir: string, options: Options) {
 async function main(src: string, opts: Record<string, any>) {
   const target = path.isAbsolute(src) ? src : path.join(process.cwd(), src)
   const skipAttributes = opts['skip-attributes']
-  return readFiles(target, {
+  await readFiles(target, {
     skipAttributes:
       typeof skipAttributes === 'string'
         ? skipAttributes.split(',')
         : skipAttributes,
     skipText: opts['skip-text'] || false
   })
+  console.log(`\n\x1b[36m> Found ${found} strings\x1b[39m`)
 }
