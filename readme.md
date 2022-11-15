@@ -46,7 +46,7 @@ index.tsx:8
 ## Options
 
 ```
---skip-attributes    Skip all string attributes or accepts comma seperated list
+--skip-attributes    Skip all string attributes or accepts comma separated list
 --skip-text          Skip all JSX text
 -v, --version        Displays current version
 -h, --help           Display help message
