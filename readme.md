@@ -40,14 +40,14 @@ C:\Users\ben\projects\find_strings\test\Example.tsx:7
 
 C:\Users\ben\projects\find_strings\test\Example.tsx:8
  8 │       <img alt="Some alt text" other={true} data-test />
-   ·
+   ·                ───────────────
 ```
 
 ## Options
 
 ```
---skip-attributes    Skip string attributes
---skip-text          Skip JSX text
+--skip-attributes    Skip all string attributes or accepts comma seperated list
+--skip-text          Skip all JSX text
 -v, --version        Displays current version
 -h, --help           Display help message
 ```

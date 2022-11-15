@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import {JSXAttribute, JSXText, parse} from '@swc/core'
+import {JSXAttribute, JSXText, parse, TsType} from '@swc/core'
 import sade from 'sade'
 import {createRequire} from 'module'
 import path from 'path'
@@ -8,7 +8,7 @@ import fs from 'fs/promises'
 import {Visitor} from '@swc/core/Visitor.js'
 
 type Options = {
-  skipAttributes: boolean
+  skipAttributes: boolean | Array<string>
   skipText: boolean
 }
 
@@ -23,6 +23,7 @@ sade('find_strings <src>', true)
   .parse(process.argv)
 
 class StringVisitor extends Visitor {
+  offset = 0
   constructor(
     public sourceFile: string,
     public sourceContent: string,
@@ -30,12 +31,16 @@ class StringVisitor extends Visitor {
   ) {
     super()
   }
+  visitModule(m) {
+    this.offset = m.span.start
+    return super.visitModule(m)
+  }
   report(start: number, end: number) {
     let lineNumber = 0,
       lineStart = 0,
       lineEnd
     for (let i = 0; i < this.sourceContent.length; i++)
-      if (this.sourceContent[i] === '\n') {
+      if (this.sourceContent.charCodeAt(i) === 10) {
         if (i < start) {
           lineNumber++
           lineStart = i + 1
@@ -47,7 +52,7 @@ class StringVisitor extends Visitor {
     const line = this.sourceContent.slice(lineStart, lineEnd)
     console.log(`\n\x1b[35m${this.sourceFile}:${lineNumber}\x1b[39m`)
     const pad = String(lineNumber).length
-    const charIndex = start - lineStart
+    const charIndex = start - lineStart + 1
     const messageLength = end - start
     //console.log(' '.repeat(pad + 2) + `╭────`)
     console.log(` ${lineNumber} │ ${line}`)
@@ -62,18 +67,33 @@ class StringVisitor extends Visitor {
   visitJSXText(text: JSXText) {
     if (!this.options.skipText) {
       const isEmpty = text.value.trim() === ''
-      if (!isEmpty) this.report(text.span.start, text.span.end)
+      if (!isEmpty)
+        this.report(text.span.start - this.offset, text.span.end - this.offset)
     }
     return text
   }
   visitJSXAttribute(attr: JSXAttribute) {
-    if (!this.options.skipAttributes) {
-      if (attr.value?.type === 'StringLiteral') {
-        const isEmpty = attr.value.value.trim() === ''
-        if (!isEmpty) this.report(attr.value.span.start, attr.value.span.end)
-      }
+    const {skipAttributes} = this.options
+    if (skipAttributes === true) return attr
+    if (Array.isArray(skipAttributes)) {
+      const attrName =
+        'value' in attr.name
+          ? attr.name.value
+          : attr.name.namespace + ':' + attr.name.name
+      if (skipAttributes.includes(attrName)) return attr
+    }
+    if (attr.value?.type === 'StringLiteral') {
+      const isEmpty = attr.value.value.trim() === ''
+      if (!isEmpty)
+        this.report(
+          attr.value.span.start - this.offset,
+          attr.value.span.end - this.offset
+        )
     }
     return attr
+  }
+  visitTsType(tsType: TsType) {
+    return tsType
   }
 }
 
@@ -104,8 +124,12 @@ async function readFiles(dir: string, options: Options) {
 
 async function main(src: string, opts: Record<string, any>) {
   const target = path.isAbsolute(src) ? src : path.join(process.cwd(), src)
+  const skipAttributes = opts['skip-attributes']
   return readFiles(target, {
-    skipAttributes: opts['skip-attributes'] || false,
+    skipAttributes:
+      typeof skipAttributes === 'string'
+        ? skipAttributes.split(',')
+        : skipAttributes,
     skipText: opts['skip-text'] || false
   })
 }
