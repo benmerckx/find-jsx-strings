@@ -59,7 +59,7 @@ class StringVisitor extends Visitor {
         if (i < end) {
           endLine.lineNr++
         } else {
-          endLine.end = i - 1
+          endLine.end = i
           break
         }
       }
