@@ -20,6 +20,7 @@ type Options = {
   skipAttributes: boolean | Array<string>
   skipText: boolean
   skipPattern?: Array<string>
+  skipFiles?: Array<string>
   minLength: number
   includeLiteral: boolean
   includeTemplate: boolean
@@ -37,6 +38,7 @@ sade('find_strings <src>', true)
     '-P, --skip-pattern',
     'Skip text or attributes that include this string'
   )
+  .option('--skip-files', 'Skip files that include this string')
   .option('--include-literal', 'Include string literals')
   .option('--include-template', 'Include template literals')
   .describe('Scan for hardcoded strings in JSX')
@@ -196,10 +198,16 @@ async function parseStrings(file: string, options: Options) {
 }
 
 async function readFiles(dir: string, options: Options) {
+  const {skipFiles} = options
   const files = await fs.readdir(dir)
-  for (const file of files) {
+  read: for (const file of files) {
     const extension = path.extname(file)
     if (extension === '.jsx' || extension === '.tsx') {
+      if (skipFiles) {
+        for (const skipPattern of skipFiles) {
+          if (file.includes(skipPattern)) continue read
+        }
+      }
       await parseStrings(path.join(dir, file), options)
     } else {
       const stat = await fs.stat(path.join(dir, file))
@@ -221,6 +229,10 @@ async function main(src: string, opts: Record<string, any>) {
       typeof opts['skip-pattern'] === 'string'
         ? [opts['skip-pattern']]
         : opts['skip-pattern'],
+    skipFiles:
+      typeof opts['skip-files'] === 'string'
+        ? opts['skip-files'].split(',')
+        : opts['skip-files'],
     minLength: opts['min'] || 1,
     includeLiteral: opts['include-literal'] || false,
     includeTemplate: opts['include-template'] || false
