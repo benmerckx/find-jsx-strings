@@ -47,6 +47,15 @@ function color(line: string, color: number) {
   return line ? `\x1b[${color}m${line}\x1b[39m` : ''
 }
 
+// Based on: https://stackoverflow.com/a/63893237
+function byteLengthCharCode(code: number) {
+  if (code < 0x0080) return 1
+  if (code < 0x0800) return 2
+  if (code < 0xd800) return 3
+  if (code < 0xdfff) return 2
+  return 3
+}
+
 class StringVisitor extends Visitor {
   offset = 0
   constructor(
@@ -60,24 +69,31 @@ class StringVisitor extends Visitor {
     this.offset = m.span.start
     return super.visitModule(m)
   }
-  report(start: number, end: number) {
+  report(byteStart: number, byteEnd: number) {
+    // Spans in swc are byte offsets, not character positions
     const {skipPattern} = this.options
     const startLine = {lineNr: 0, start: 0}
     const endLine = {lineNr: 0, end: undefined}
+    let byteIndex = 0,
+      start = 0,
+      end = 0
     for (let i = 0; i < this.sourceContent.length; i++) {
       const code = this.sourceContent.charCodeAt(i)
+      byteIndex += byteLengthCharCode(code)
       if (code === 10) {
-        if (i < start) {
+        if (byteIndex < byteStart) {
           startLine.lineNr++
           startLine.start = i + 1
         }
-        if (i < end) {
+        if (byteIndex < byteEnd) {
           endLine.lineNr++
         } else {
           endLine.end = i
           break
         }
       }
+      if (byteIndex === byteStart) start = i + 1
+      if (byteIndex === byteEnd) end = i + 1
     }
 
     const lines = endLine.lineNr - startLine.lineNr + 1
