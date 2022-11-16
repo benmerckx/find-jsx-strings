@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 
-import {JSXAttribute, JSXText, parse, TsType} from '@swc/core'
+import {
+  Expression,
+  ImportDeclaration,
+  JSXAttribute,
+  JSXText,
+  parse,
+  StringLiteral,
+  TemplateLiteral,
+  TsType
+} from '@swc/core'
 import sade from 'sade'
 import {createRequire} from 'module'
 import path from 'path'
@@ -11,6 +20,9 @@ type Options = {
   skipAttributes: boolean | Array<string>
   skipText: boolean
   skipPattern?: Array<string>
+  minLength: number
+  includeLiteral: boolean
+  includeTemplate: boolean
 }
 
 const version = createRequire(import.meta.url)('../package.json').version
@@ -18,12 +30,15 @@ let found = 0
 
 sade('find_strings <src>', true)
   .version(version)
+  .option('--min', 'Minimum length of string to find')
   .option('-A, --skip-attributes', 'Skip string attributes')
   .option('--skip-text', 'Skip JSX text')
   .option(
     '-P, --skip-pattern',
     'Skip text or attributes that include this string'
   )
+  .option('--include-literal', 'Include string literals')
+  .option('--include-template', 'Include template literals')
   .describe('Scan for hardcoded strings in JSX')
   .action(main)
   .parse(process.argv)
@@ -96,17 +111,17 @@ class StringVisitor extends Visitor {
     found++
   }
   visitJSXText(text: JSXText) {
-    const {skipText} = this.options
+    const {skipText, minLength} = this.options
     if (!skipText) {
-      const isEmpty = text.value.trim() === ''
+      const isEmpty = text.value.trim().length < minLength
       if (!isEmpty)
         this.report(text.span.start - this.offset, text.span.end - this.offset)
     }
-    return text
+    return super.visitJSXText(text)
   }
   visitJSXAttribute(attr: JSXAttribute) {
-    const {skipAttributes} = this.options
-    if (skipAttributes === true) return attr
+    const {skipAttributes, minLength} = this.options
+    if (skipAttributes === true) return super.visitJSXAttribute(attr)
     if (Array.isArray(skipAttributes)) {
       const attrName =
         'value' in attr.name
@@ -115,14 +130,37 @@ class StringVisitor extends Visitor {
       if (skipAttributes.includes(attrName)) return attr
     }
     if (attr.value?.type === 'StringLiteral') {
-      const isEmpty = attr.value.value.trim() === ''
+      const isEmpty = attr.value.value.trim().length < minLength
       if (!isEmpty)
         this.report(
           attr.value.span.start - this.offset,
           attr.value.span.end - this.offset
         )
+      return attr
     }
-    return attr
+    return super.visitJSXAttribute(attr)
+  }
+  visitTemplateLiteral(literal: TemplateLiteral): Expression {
+    const {includeTemplate} = this.options
+    if (includeTemplate)
+      this.report(
+        literal.span.start - this.offset,
+        literal.span.end - this.offset
+      )
+    return super.visitTemplateLiteral(literal)
+  }
+  visitStringLiteral(literal: StringLiteral): StringLiteral {
+    const {includeLiteral, minLength} = this.options
+    if (includeLiteral && literal.value.trim().length >= minLength)
+      this.report(
+        literal.span.start - this.offset,
+        literal.span.end - this.offset
+      )
+    return literal
+  }
+  visitImportDeclaration(n: ImportDeclaration): ImportDeclaration {
+    // Skip string literals in imports
+    return n
   }
   visitTsType(tsType: TsType) {
     return tsType
@@ -166,7 +204,10 @@ async function main(src: string, opts: Record<string, any>) {
     skipPattern:
       typeof opts['skip-pattern'] === 'string'
         ? [opts['skip-pattern']]
-        : opts['skip-pattern']
+        : opts['skip-pattern'],
+    minLength: opts['min'] || 1,
+    includeLiteral: opts['include-literal'] || false,
+    includeTemplate: opts['include-template'] || false
   })
   console.log(`\n\x1b[36m> Found ${found} strings\x1b[39m`)
 }
