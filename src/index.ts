@@ -81,7 +81,6 @@ class StringVisitor extends Visitor {
       end = 0
     for (let i = 0; i < this.sourceContent.length; i++) {
       const code = this.sourceContent.charCodeAt(i)
-      byteIndex += byteLengthCharCode(code)
       if (code === 10) {
         if (byteIndex < byteStart) {
           startLine.lineNr++
@@ -94,8 +93,9 @@ class StringVisitor extends Visitor {
           break
         }
       }
-      if (byteIndex === byteStart) start = i + 1
-      if (byteIndex === byteEnd) end = i + 1
+      if (byteIndex === byteStart) start = i
+      if (byteIndex === byteEnd) end = i
+      byteIndex += byteLengthCharCode(code)
     }
 
     const lines = endLine.lineNr - startLine.lineNr + 1
