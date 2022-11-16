@@ -10,6 +10,7 @@ import {Visitor} from '@swc/core/Visitor.js'
 type Options = {
   skipAttributes: boolean | Array<string>
   skipText: boolean
+  skipPattern?: Array<string>
 }
 
 const version = createRequire(import.meta.url)('../package.json').version
@@ -17,11 +18,19 @@ let found = 0
 
 sade('find_strings <src>', true)
   .version(version)
-  .option('--skip-attributes', 'Skip string attributes')
+  .option('-A, --skip-attributes', 'Skip string attributes')
   .option('--skip-text', 'Skip JSX text')
+  .option(
+    '-P, --skip-pattern',
+    'Skip text or attributes that include this string'
+  )
   .describe('Scan for hardcoded strings in JSX')
   .action(main)
   .parse(process.argv)
+
+function color(line: string, color: number) {
+  return line ? `\x1b[${color}m${line}\x1b[39m` : ''
+}
 
 class StringVisitor extends Visitor {
   offset = 0
@@ -37,37 +46,58 @@ class StringVisitor extends Visitor {
     return super.visitModule(m)
   }
   report(start: number, end: number) {
-    let lineNumber = 0,
-      lineStart = 0,
-      lineEnd
-    for (let i = 0; i < this.sourceContent.length; i++)
-      if (this.sourceContent.charCodeAt(i) === 10) {
+    const {skipPattern} = this.options
+    const startLine = {lineNr: 0, start: 0}
+    const endLine = {lineNr: 0, end: undefined}
+    for (let i = 0; i < this.sourceContent.length; i++) {
+      const code = this.sourceContent.charCodeAt(i)
+      if (code === 10) {
         if (i < start) {
-          lineNumber++
-          lineStart = i + 1
+          startLine.lineNr++
+          startLine.start = i + 1
+        }
+        if (i < end) {
+          endLine.lineNr++
         } else {
-          lineEnd = i
+          endLine.end = i - 1
           break
         }
       }
-    const line = this.sourceContent.slice(lineStart, lineEnd)
-    console.log(`\n\x1b[35m${this.sourceFile}:${lineNumber}\x1b[39m`)
-    const pad = String(lineNumber).length
-    const charIndex = start - lineStart + 1
-    const messageLength = end - start
-    //console.log(' '.repeat(pad + 2) + `╭────`)
-    console.log(` ${lineNumber} │ ${line}`)
+    }
+
+    const lines = endLine.lineNr - startLine.lineNr + 1
+    const source = this.sourceContent.slice(startLine.start, endLine.end)
+
+    if (skipPattern) {
+      for (const pattern of skipPattern) {
+        if (source.includes(pattern)) return
+      }
+    }
+
+    const prefix = found === 0 ? '' : '\n'
     console.log(
-      ' '.repeat(pad + 2) +
-        `·` +
-        ' '.repeat(charIndex) +
-        '─'.repeat(messageLength)
+      `${prefix}\x1b[35m${this.sourceFile}:${startLine.lineNr + 1}\x1b[39m`
     )
-    //console.log(' '.repeat(pad + 2) + `╰────`)
+
+    const pad = Math.max(4, String(endLine.lineNr).length)
+    let index = startLine.start
+
+    for (const [i, line] of source.split('\n').entries()) {
+      const nr = startLine.lineNr + i + 1
+      const pre = i === 0 ? start - index : 0
+      const post = i === lines - 1 ? end - index : line.length
+      const highlight = line.slice(pre, post)
+      const content =
+        color(line.slice(0, pre), 90) + highlight + color(line.slice(post), 90)
+      console.log(` ${String(nr).padStart(pad, ' ')} │ ${content}`)
+      index += line.length + 1
+    }
+
     found++
   }
   visitJSXText(text: JSXText) {
-    if (!this.options.skipText) {
+    const {skipText} = this.options
+    if (!skipText) {
       const isEmpty = text.value.trim() === ''
       if (!isEmpty)
         this.report(text.span.start - this.offset, text.span.end - this.offset)
@@ -132,7 +162,11 @@ async function main(src: string, opts: Record<string, any>) {
       typeof skipAttributes === 'string'
         ? skipAttributes.split(',')
         : skipAttributes,
-    skipText: opts['skip-text'] || false
+    skipText: opts['skip-text'] || false,
+    skipPattern:
+      typeof opts['skip-pattern'] === 'string'
+        ? [opts['skip-pattern']]
+        : opts['skip-pattern']
   })
   console.log(`\n\x1b[36m> Found ${found} strings\x1b[39m`)
 }
